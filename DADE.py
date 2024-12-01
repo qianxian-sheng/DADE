@@ -18,10 +18,6 @@ Archive = []  # taboo archive
 
 gbest_f = -math.inf  # the fitness of global best individual
 
-NSR = 0  # the number of successful runs
-NR = 0  # the number of runs
-NPF = 0  # the number of global optima found in one run
-
 K = 0  # maximum number of niches
 
 
@@ -140,13 +136,13 @@ def niches_divisions(pop, problem):  # divide all niches
     return divisions
 
 
-def divide_population(pop, problem):  # divide all the niches and place them in the array "sub_populations"
+def divide_population(pop, problem, stag_threshold):  # divide all the niches and place them in the array "sub_populations"
     global gbest_f, accuracy
     divisions = niches_divisions(pop, problem)
     sub_populations.clear()
     for i in range(len(divisions)):
         p = Population(divisions[i])
-        p.update(gbest_f, accuracy, problem)
+        p.update(gbest_f, accuracy, problem, stag_threshold)
         sub_populations.append(p)
 
 
@@ -173,17 +169,17 @@ def diversity_based_mutation(p, problem, j):  # the diversity based mutation
     boundary = distribution_of_diversity(Du, D)
     r = np.random.rand()
     if r <= boundary:
-        indices = [x for x in range(p.size) if x != j]
-        selected = random.sample(indices, 5)
-        v = p.individuals[selected[0]].position + F * \
-            (p.individuals[selected[1]].position - p.individuals[selected[2]].position) + F * \
-            (p.individuals[selected[3]].position - p.individuals[selected[4]].position)
-    else:
         indices = [x for x in range(p.size) if x != p.xbest_index]
         selected = random.sample(indices, 4)
         v = p.xbest.position + F * \
             (p.individuals[selected[0]].position - p.individuals[selected[1]].position) + F * \
             (p.individuals[selected[2]].position - p.individuals[selected[3]].position)
+    else:
+        indices = [x for x in range(p.size) if x != j]
+        selected = random.sample(indices, 5)
+        v = p.individuals[selected[0]].position + F * \
+            (p.individuals[selected[1]].position - p.individuals[selected[2]].position) + F * \
+            (p.individuals[selected[3]].position - p.individuals[selected[4]].position)
 
     return v
 
@@ -271,20 +267,20 @@ def update_archive():  # add all the data into the taboo archive
         p.added = append_archive(xbest, p.radius)
 
 
-def stagnant_check_and_processing(problem):  # check and process the stagnant niches
+def stagnant_check_and_processing(problem, stag_threshold, stag_time):  # check and process the stagnant niches
     global accuracy, gbest_f, FES
     for i in range(len(sub_populations)):
         p = sub_populations[i]
-        if p.gap_counter > 15:
+        if p.gap_counter > stag_time:
             for j in range(p.size):
                 p.individuals[j] = taboo_reinitialization(problem)
                 FES += 1
-            p.update(gbest_f, accuracy, problem)
+            p.update(gbest_f, accuracy, problem, stag_threshold)
             p.trapped = True  # the niche has been trapped into local optima
 
 
 # Check if any niches that once fell into local optima converged to the taboo regions
-def stagnant_in_taboo_regions_check(problem):
+def stagnant_in_taboo_regions_check(problem, stag_threshold):
     global FES, gbest_f, accuracy
     for i in range(len(sub_populations)):
         p = sub_populations[i]
@@ -305,7 +301,7 @@ def stagnant_in_taboo_regions_check(problem):
                         p.individuals[j] = taboo_reinitialization(problem)
                         FES += 1
                         break
-            p.update(gbest_f, accuracy, problem)
+            p.update(gbest_f, accuracy, problem, stag_threshold)
             if not in_range:
                 p.trapped = False
 
@@ -332,18 +328,38 @@ def converge_check(problem):
     return re
 
 
-def redivide_population(problem):  # redividing the population into several niches
+def high_dimensional_converge_check(problem, stag_time):
+    global FES
+    re = False
+    for i in range(len(sub_populations)):
+        p = sub_populations[i]
+        flag = False
+        if p.near_counter > stag_time:
+            flag = True
+        if flag:
+            for j in range(p.size):
+                indi = p.individuals[j]
+                S.append(indi)
+                p.individuals[j] = common_reinitialization(problem)
+                FES += 1
+                re = True
+
+    return re
+
+
+def redivide_population(problem, stag_threshold):  # redividing the population into several niches
     pop = []
     for i in range(len(sub_populations)):
         p = sub_populations[i]
         for j in range(p.size):
             pop.append(p.individuals[j])
 
-    divide_population(pop, problem)
+    divide_population(pop, problem, stag_threshold)
 
 
-def DADE(problem):  # the main DADE algorithm
+def DADE(problem, stag_threshold, stag_time):  # the main DADE algorithm
     global FES, MAX_FES, gbest_f, accuracy
+    dim = problem.get_dimension()
     MAX_FES = problem.get_maxfes()
     pop = create_individuals(problem)
     for i in range(len(pop)):
@@ -361,7 +377,7 @@ def DADE(problem):  # the main DADE algorithm
         if U.fitness > indi.fitness:
             pop[i] = U
 
-    divide_population(pop, problem)
+    divide_population(pop, problem, stag_threshold)
     while FES < MAX_FES:  # while the end condition is not reached
         for i in range(len(sub_populations)):
             p = sub_populations[i]
@@ -371,7 +387,7 @@ def DADE(problem):  # the main DADE algorithm
                 u = crossover(indi, v)  # crossover
                 selection(p, j, u, problem)  # selection
                 FES += 1
-            p.update(gbest_f, accuracy, problem)  # update the information of each niche
+            p.update(gbest_f, accuracy, problem, stag_threshold)  # update the information of each niche
 
         best = get_best_individual()
         best_f = best.fitness
@@ -379,10 +395,15 @@ def DADE(problem):  # the main DADE algorithm
             gbest_f = best_f
 
         update_archive()  # update the taboo archive
-        stagnant_check_and_processing(problem)  # local optima processing
-        stagnant_in_taboo_regions_check(problem)  # local optima processing
-        if converge_check(problem):
-            redivide_population(problem)
+        stagnant_check_and_processing(problem, stag_time, stag_time)  # local optima processing
+        stagnant_in_taboo_regions_check(problem, stag_threshold)  # local optima processing
+
+        if dim < 10:
+            if converge_check(problem):
+                redivide_population(problem, stag_threshold)
+        else:
+            if high_dimensional_converge_check(problem, stag_time):
+                redivide_population(problem, stag_threshold)
 
 
 result = []
@@ -401,23 +422,8 @@ def calculate_data(problem):  # record the result in one run
 
     positions = np.array(positions)
     count, seeds = how_many_goptima(positions, problem, accuracy)
-    result.append(count)
-    print(f"In the current population there exist {count} global optimizers.")
-    print("Global optimizers:")
-    print(seeds)
-    global NPF, NSR
-    NPF += count
-    if count == problem.get_no_goptima():
-        NSR += 1
 
-
-def calculate_result(problem):  # calculate the PR, SR value
-    NKP = problem.get_no_goptima()
-    PR = NPF / (NKP * NR)  # peak ratio
-
-    SR = NSR / NR  # success rate
-
-    return PR, SR
+    return count
 
 
 def reset():  # Reset some base variables
@@ -441,40 +447,26 @@ def set_NP(n_function):  # set the number of individuals according to the proble
         NP = 200
 
 
-def run_all_functions(time):  # run all the functions "time" times
-    global NSR, NR, NPF, NP
-    n_functions = 20
-    print(f"########## result over {time} runs ##########")
-    for i in range(n_functions):
-        problem = CEC2013(i+1)
-        set_NP(i+1)
-        NSR = NPF = 0
-        NR = time
-        for j in range(time):
-            reset()
-            DADE(problem)
-            calculate_data(problem)
-        PR, SR = calculate_result(problem)
-        print(f"function{i+1}: peak ratio: {PR}  success rate: {SR}")
-
-
-def run_one_function(time, problem):  # run one function "time" times
-    global NR
-    NR = time
+def run_multiple_times(time, func_no, stag_threshold, stag_time):  # run one function "time" times
+    count = 0
+    problem = CEC2013(func_no)
+    success = 0
     for i in range(time):
-        print(f"================第{i+1}次运行================")
+        set_NP(func_no)
         reset()
-        DADE(problem)
-        calculate_data(problem)
-    PR, SR = calculate_result(problem)
-    print(f"########## result over {time} runs ##########")
-    print(f"peak ratio: {PR}        success rate: {SR}")
+        DADE(problem, stag_threshold, stag_time)
+        peaks = calculate_data(problem)
+        count += peaks
+        if peaks == problem.get_no_goptima():
+            success += 1
+    PR = count/(problem.get_no_goptima()*time)
+    SR = success / time
+
+    return PR, SR
 
 
-if __name__ == "__main__":
-    f = CEC2013(6)
-    run_one_function(51, f)
-    # run_all_functions(51)
+
+
 
 
 
