@@ -27,6 +27,7 @@ class Population:  # subpopulation(niche)
         self.xbest_f = -math.inf  # fitness of the best individual
 
         self.gap_counter = 0  # the continuous iterations that its best individual is worse than global optima
+        self.near_counter = 0  # for high-dimensional problems
 
         self.Dc = None  # centroid based diversity
 
@@ -53,7 +54,7 @@ class Population:  # subpopulation(niche)
 
         return Dc
 
-    def update(self, gbest, accuracy, problem):  # update the information of the niche
+    def update(self, gbest, accuracy, problem, stag_threshold):  # update the information of the niche
         best_i = 0
         best_f = self.individuals[0].fitness
         for i in range(self.size):
@@ -66,13 +67,23 @@ class Population:  # subpopulation(niche)
 
         self.Dc = self.cal_Dc(problem)  # calculate the diversity
 
-        if self.Dc < 1e-5:
+        if self.Dc < stag_threshold:
             if abs(self.xbest.fitness - gbest) > accuracy:
                 self.gap_counter += 1
             else:
                 self.gap_counter = 0
         else:
             self.gap_counter = 0
+
+        dim = problem.get_dimension()
+        if dim >= 10:
+            if self.Dc < stag_threshold:
+                if abs(self.xbest.fitness - gbest) <= accuracy:
+                    self.near_counter += 1
+                else:
+                    self.near_counter = 0
+            else:
+                self.gap_counter = 0
 
     def cal_radius(self):  # calculate distance between the best individual and its nearest individual
         nearest_i = 0
