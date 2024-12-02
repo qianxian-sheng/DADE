@@ -134,13 +134,13 @@ def niches_divisions(pop, problem):  # divide all niches
     return divisions
 
 
-def divide_population(pop, problem, stag_threshold):  # divide all the niches and place them in the array "sub_populations"
+def divide_population(pop, problem, rho):  # divide all the niches and place them in the array "sub_populations"
     global gbest_f, accuracy
     divisions = niches_divisions(pop, problem)
     sub_populations.clear()
     for i in range(len(divisions)):
         p = Population(divisions[i])
-        p.update(gbest_f, accuracy, problem, stag_threshold)
+        p.update(gbest_f, accuracy, problem, rho)
         sub_populations.append(p)
 
 
@@ -265,20 +265,20 @@ def update_archive():  # add all the data into the taboo archive
         p.added = append_archive(xbest, p.radius)
 
 
-def stagnant_check_and_processing(problem, stag_threshold, stag_time):  # check and process the stagnant niches
+def stagnant_check_and_processing(problem, rho, lambdas):  # check and process the stagnant niches
     global accuracy, gbest_f, FES
     for i in range(len(sub_populations)):
         p = sub_populations[i]
-        if p.gap_counter > stag_time:
+        if p.gap_counter > lambdas:
             for j in range(p.size):
                 p.individuals[j] = taboo_reinitialization(problem)
                 FES += 1
-            p.update(gbest_f, accuracy, problem, stag_threshold)
+            p.update(gbest_f, accuracy, problem, rho)
             p.trapped = True  # the niche has been trapped into local optima
 
 
 # Check if any niches that once fell into local optima converged to the taboo regions
-def stagnant_in_taboo_regions_check(problem, stag_threshold):
+def stagnant_in_taboo_regions_check(problem, rho):
     global FES, gbest_f, accuracy
     for i in range(len(sub_populations)):
         p = sub_populations[i]
@@ -299,7 +299,7 @@ def stagnant_in_taboo_regions_check(problem, stag_threshold):
                         p.individuals[j] = taboo_reinitialization(problem)
                         FES += 1
                         break
-            p.update(gbest_f, accuracy, problem, stag_threshold)
+            p.update(gbest_f, accuracy, problem, rho)
             if not in_range:
                 p.trapped = False
 
@@ -327,13 +327,13 @@ def converge_check(problem):
 
 
 # Check if any niche successfully converges to the global optimal solution (for high dimensional problems)
-def high_dimensional_converge_check(problem, stag_time):
+def high_dimensional_converge_check(problem, lambdas):
     global FES
     re = False
     for i in range(len(sub_populations)):
         p = sub_populations[i]
         flag = False
-        if p.near_counter > stag_time:
+        if p.near_counter > lambdas:
             flag = True
         if flag:
             for j in range(p.size):
@@ -346,22 +346,22 @@ def high_dimensional_converge_check(problem, stag_time):
     return re
 
 
-def redivide_population(problem, stag_threshold):  # redividing the population into several niches
+def redivide_population(problem, rho):  # redividing the population into several niches
     pop = []
     for i in range(len(sub_populations)):
         p = sub_populations[i]
         for j in range(p.size):
             pop.append(p.individuals[j])
 
-    divide_population(pop, problem, stag_threshold)
+    divide_population(pop, problem, rho)
 
 
-def DADE(problem, stag_threshold, stag_time):  # the main DADE algorithm
+def DADE(problem, rho, lambdas):  # the main DADE algorithm
     global FES, MAX_FES, gbest_f, accuracy
     dim = problem.get_dimension()
     MAX_FES = problem.get_maxfes()
     pop = create_individuals(problem)
-    divide_population(pop, problem, stag_threshold)
+    divide_population(pop, problem, rho)
     while FES < MAX_FES:  # while the end condition is not reached
         for i in range(len(sub_populations)):
             p = sub_populations[i]
@@ -371,7 +371,7 @@ def DADE(problem, stag_threshold, stag_time):  # the main DADE algorithm
                 u = crossover(indi, v)  # crossover
                 selection(p, j, u, problem)  # selection
                 FES += 1
-            p.update(gbest_f, accuracy, problem, stag_threshold)  # update the information of each niche
+            p.update(gbest_f, accuracy, problem, rho)  # update the information of each niche
 
         best = get_best_individual()
         best_f = best.fitness
@@ -379,16 +379,16 @@ def DADE(problem, stag_threshold, stag_time):  # the main DADE algorithm
             gbest_f = best_f
 
         update_archive()  # update the taboo archive
-        stagnant_check_and_processing(problem, stag_time, stag_time)  # local optima processing
-        stagnant_in_taboo_regions_check(problem, stag_threshold)  # local optima processing
+        stagnant_check_and_processing(problem, lambdas, lambdas)  # local optima processing
+        stagnant_in_taboo_regions_check(problem, rho)  # local optima processing
 
         # Check if any niche successfully converges to the global optimal solution
         if dim < 10:
             if converge_check(problem):
-                redivide_population(problem, stag_threshold)
+                redivide_population(problem, rho)
         else:
-            if high_dimensional_converge_check(problem, stag_time):
-                redivide_population(problem, stag_threshold)
+            if high_dimensional_converge_check(problem, lambdas):
+                redivide_population(problem, rho)
 
 
 result = []
@@ -432,14 +432,14 @@ def set_NP(n_function):  # set the number of individuals according to the proble
         NP = 200
 
 
-def run_multiple_times(time, func_no, stag_threshold, stag_time):  # run DADE multiple times on one function
+def run_multiple_times(time, func_no, rho, lambdas):  # run DADE multiple times on one function
     count = 0
     problem = CEC2013(func_no)
     success = 0
     set_NP(func_no)
     for i in range(time):
         reset()
-        DADE(problem, stag_threshold, stag_time)
+        DADE(problem, rho, lambdas)
         peaks = calculate_data(problem)
         count += peaks
         if peaks == problem.get_no_goptima():
@@ -448,6 +448,7 @@ def run_multiple_times(time, func_no, stag_threshold, stag_time):  # run DADE mu
     SR = success / time
 
     return PR, SR
+
 
 
 
