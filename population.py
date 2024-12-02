@@ -54,7 +54,7 @@ class Population:  # subpopulation(niche)
 
         return Dc
 
-    def update(self, gbest, accuracy, problem, stag_threshold):  # update the information of the niche
+    def update(self, gbest, accuracy, problem, rho):  # update the information of the niche
         best_i = 0
         best_f = self.individuals[0].fitness
         for i in range(self.size):
@@ -67,7 +67,7 @@ class Population:  # subpopulation(niche)
 
         self.Dc = self.cal_Dc(problem)  # calculate the diversity
 
-        if self.Dc < stag_threshold:
+        if self.Dc < rho:
             if abs(self.xbest.fitness - gbest) > accuracy:
                 self.gap_counter += 1
             else:
@@ -77,7 +77,7 @@ class Population:  # subpopulation(niche)
 
         dim = problem.get_dimension()
         if dim >= 10:
-            if self.Dc < stag_threshold:
+            if self.Dc < rho:
                 if abs(self.xbest.fitness - gbest) <= accuracy:
                     self.near_counter += 1
                 else:
