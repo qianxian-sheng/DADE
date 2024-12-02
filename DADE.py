@@ -394,7 +394,7 @@ def DADE(problem, rho, lambdas):  # the main DADE algorithm
 result = []
 
 
-def calculate_data(problem):  # calculate the result of one run
+def calculate_result(problem):  # calculate the result of one run
     positions = []
     for i in range(len(sub_populations)):
         p = sub_populations[i]
@@ -440,7 +440,7 @@ def run_multiple_times(time, func_no, rho, lambdas):  # run DADE multiple times 
     for i in range(time):
         reset()
         DADE(problem, rho, lambdas)
-        peaks = calculate_data(problem)
+        peaks = calculate_result(problem)
         count += peaks
         if peaks == problem.get_no_goptima():
             success += 1
