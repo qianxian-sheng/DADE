@@ -4,7 +4,7 @@ import random
 import copy
 from scipy.integrate import quad
 
-NP = 100  # number of individuals
+NP = 0  # number of individuals
 F = 0.5  # scale factor
 CR = 0.9  # crossover rate
 accuracy_level = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5]  # accuracy levels
@@ -17,8 +17,6 @@ S = []  # success archive
 Archive = []  # taboo archive
 
 gbest_f = -math.inf  # the fitness of global best individual
-
-K = 0  # maximum number of niches
 
 
 def create_individuals(problem):  # create NP individuals
@@ -328,6 +326,7 @@ def converge_check(problem):
     return re
 
 
+# Check if any niche successfully converges to the global optimal solution (for high dimensional problems)
 def high_dimensional_converge_check(problem, stag_time):
     global FES
     re = False
@@ -362,21 +361,6 @@ def DADE(problem, stag_threshold, stag_time):  # the main DADE algorithm
     dim = problem.get_dimension()
     MAX_FES = problem.get_maxfes()
     pop = create_individuals(problem)
-    for i in range(len(pop)):
-        indi = pop[i]
-        indices = [x for x in range(len(pop))]
-        selected = random.sample(indices, 5)
-        v = pop[selected[0]].position + F * \
-            (pop[selected[1]].position - pop[selected[2]].position) + F * \
-            (pop[selected[3]].position - pop[selected[4]].position)
-        u = crossover(indi, v)
-        U = Individual(problem)
-        U.position = u
-        U.eval_fitness(problem)
-        FES += 1
-        if U.fitness > indi.fitness:
-            pop[i] = U
-
     divide_population(pop, problem, stag_threshold)
     while FES < MAX_FES:  # while the end condition is not reached
         for i in range(len(sub_populations)):
@@ -398,6 +382,7 @@ def DADE(problem, stag_threshold, stag_time):  # the main DADE algorithm
         stagnant_check_and_processing(problem, stag_time, stag_time)  # local optima processing
         stagnant_in_taboo_regions_check(problem, stag_threshold)  # local optima processing
 
+        # Check if any niche successfully converges to the global optimal solution
         if dim < 10:
             if converge_check(problem):
                 redivide_population(problem, stag_threshold)
@@ -409,7 +394,7 @@ def DADE(problem, stag_threshold, stag_time):  # the main DADE algorithm
 result = []
 
 
-def calculate_data(problem):  # record the result in one run
+def calculate_data(problem):  # calculate the result of one run
     positions = []
     for i in range(len(sub_populations)):
         p = sub_populations[i]
@@ -421,7 +406,7 @@ def calculate_data(problem):  # record the result in one run
         positions.append(S[i].position)
 
     positions = np.array(positions)
-    count, seeds = how_many_goptima(positions, problem, accuracy)
+    count, _ = how_many_goptima(positions, problem, accuracy)
 
     return count
 
@@ -447,12 +432,12 @@ def set_NP(n_function):  # set the number of individuals according to the proble
         NP = 200
 
 
-def run_multiple_times(time, func_no, stag_threshold, stag_time):  # run one function "time" times
+def run_multiple_times(time, func_no, stag_threshold, stag_time):  # run DADE multiple times on one function
     count = 0
     problem = CEC2013(func_no)
     success = 0
+    set_NP(func_no)
     for i in range(time):
-        set_NP(func_no)
         reset()
         DADE(problem, stag_threshold, stag_time)
         peaks = calculate_data(problem)
@@ -463,8 +448,6 @@ def run_multiple_times(time, func_no, stag_threshold, stag_time):  # run one fun
     SR = success / time
 
     return PR, SR
-
-
 
 
 
